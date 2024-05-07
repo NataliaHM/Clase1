@@ -1,0 +1,173 @@
+---
+title: "TareaETS2"
+format: html
+editor: visual
+---
+
+#Ejercicio2
+
+```{r}
+#| message: false
+library(tidyverse)
+library(fpp3)
+```
+
+```{r}
+aus_production
+```
+
+```{r}
+recent_production <- aus_production %>% filter(year(Quarter) >= 1987)
+bricks_train <- recent_production %>% filter(year(Quarter) <= 2002)
+```
+
+```{r}
+bricks_fit <- bricks_train %>%
+  model(
+    Mean = MEAN(Bricks),
+    `Naïve` = NAIVE(Bricks),
+    `Seasonal naïve` = SNAIVE(Bricks),
+    Drift = RW(Bricks ~ drift())
+  )
+
+bricks_fc <- bricks_fit %>%
+  forecast(h = 10)
+
+bricks_fc %>%
+  autoplot(recent_production, level = NULL) +
+  xlab("Year") + ylab("Pieces") +
+  ggtitle("Forecasts for quarterly bricks production") +
+  guides(colour=guide_legend(title="Forecast"))
+
+bricks_accu_train <- accuracy(bricks_fit) |> 
+  arrange(MAE)
+bricks_accu_train
+```
+
+```{r}
+bricks_accu_fc <- bricks_fc |> 
+  accuracy(recent_production) |> 
+  arrange(MAE)
+
+bricks_accu_fc
+```
+
+```{r}
+bricks_train |> 
+  autoplot(Bricks)
+
+bricks_train |> 
+  autoplot(log(Bricks))
+
+
+```
+
+```{r}
+dcmp <- bricks_train |> 
+  model(
+    STL(log(Bricks), robust = TRUE)
+  ) 
+
+dcmp |> 
+  components() |> 
+  autoplot()
+
+dcmp |> 
+  components() |> 
+  ggplot(aes(x = Quarter, y = season_adjust)) +
+  geom_line()
+
+bricks_train |> 
+  model(
+    STL(Bricks, robust = TRUE)
+  ) |> 
+  components() |> 
+  autoplot()
+```
+
+```{r}
+bricks_fit <- bricks_train |> 
+  model(
+    snaive = SNAIVE(Bricks),
+    ets_ANA = ETS(Bricks ~ error("A") + trend("N") + season("A")),
+    ets_AAdA = ETS(Bricks ~ error("A") + trend("Ad") + season("A")),
+    ets_MAdM = ETS(Bricks ~ error("M") + trend("Ad") + season("M")),
+    ets_ANA_l = ETS(log(Bricks) ~ error("A") + trend("N") + season("A")),
+    ets_AAdA_l = ETS(log(Bricks) ~ error("A") + trend("Ad") + season("A")),
+    ets_MAdM_l = ETS(log(Bricks) ~ error("M") + trend("Ad") + season("M")),
+    stl_ets_A = decomposition_model(
+      STL(log(Bricks), robust = TRUE),
+      ETS(season_year ~ error("A") + trend("N") + season("A")),
+      ETS(season_adjust ~ error("A") + trend("Ad") + season("N"))
+    ),
+    stl_ets_M = decomposition_model(
+      STL(log(Bricks), robust = TRUE),
+      ETS(season_year ~ error("M") + trend("N") + season("M")),
+      ETS(season_adjust ~ error("A") + trend("Ad") + season("N"))
+    )
+  )
+
+bricks_fit
+```
+
+```{r}
+accuracy(bricks_fit) |> 
+  arrange(MAPE)
+```
+
+```{r}
+bricks_fit |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 8)
+```
+
+```{r}
+bricks_fit |> 
+  select(stl_ets_A) |> 
+  gg_tsresiduals()
+
+bricks_fit |> 
+  select(stl_ets_M) |> 
+  gg_tsresiduals()
+```
+
+```{r}
+bricks_fc <- bricks_fit |> 
+  forecast(h = "2 years 6 months")
+
+bricks_fc
+
+bricks_fc |> 
+  autoplot(recent_production, level = NULL, size = 1)
+
+bricks_fc |> 
+  autoplot(recent_production |> filter_index("2000 Q1" ~ .), level = NULL, size = 1)
+
+bricks_fc |> 
+  autoplot(recent_production |> filter_index("2000 Q1" ~ .), size = 1) +
+  facet_wrap(~ .model, ncol = 3) +
+  theme(legend.position = "none")
+
+bricks_fc |> 
+  filter(.model != "stl_ets_M") |> 
+  autoplot(recent_production |> filter_index("2000 Q1" ~ .), size = 1) +
+  facet_wrap(~ .model, ncol = 3) +
+  theme(legend.position = "none")
+
+bricks_fc |> 
+  accuracy(recent_production) |> 
+  arrange(MAPE)
+```
+
+```{r}
+bricks_fut <- recent_production |> 
+  model(
+   ets_ANA = ETS(Bricks ~ error("A") + trend("N") + season("A")),
+  ) |> 
+  forecast(h = "1 years")
+
+bricks_fut
+
+bricks_fut |> 
+  autoplot(recent_production)
+```

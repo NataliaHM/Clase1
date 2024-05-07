@@ -1,0 +1,240 @@
+---
+title: "Forecasting"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+```
+
+
+```{r}
+mex <- global_economy |> 
+  filter(Country == "Mexico") |> 
+  drop_na() |> 
+  select(-c(Country, Code))
+
+mex |> 
+  features(Growth, features = guerrero)
+
+mex |> 
+  autoplot(Growth)
+
+mex |> 
+  autoplot(box_cox(Growth, lambda = 0.7249))
+```
+## Estimación de los modelos
+
+```{r}
+mex_fit <- mex |> 
+  model(
+    media = MEAN(box_cox(Growth, lambda = 0.7249)),
+    naive = NAIVE(box_cox(Growth, lambda = 0.7249)),
+    drift = RW(box_cox(Growth, lambda = 0.7249) ~ drift())
+  )
+
+mex_fit
+```
+## Diagnóstico de residuos
+
+```{r}
+mex_fit |> 
+  augment()
+
+mex_fit |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 10, dof = 0)
+```
+Como el p-value de los tres modelos es mayor a nuestra $\alpha$; $p_{value} = 0.05$, **NO RECHAZAMOS** $H_0 : \text{"Los residuos son ruido blanco"}$.
+
+### Media
+
+```{r}
+#| warning: false
+
+mex_fit |> 
+  select(media) |> 
+  gg_tsresiduals()
+```
+
+### Naive
+
+```{r}
+#| warning: false
+
+mex_fit |> 
+  select(naive) |> 
+  gg_tsresiduals()
+```
+
+### Drift
+
+```{r}
+#| warning: false
+
+mex_fit |> 
+  select(drift) |> 
+  gg_tsresiduals()
+```
+
+
+## Forecast
+
+```{r}
+mex_fc <- mex_fit |> 
+  forecast(h = "6 years")
+
+mex_fc
+
+mex_fc |> 
+  autoplot(mex) +
+  facet_wrap(~ .model) +
+  theme(legend.position = "none")
+```
+
+# Repaso
+
+```{r}
+aus_livestock |> 
+  distinct(Animal)
+```
+
+## Data
+
+```{r}
+ovejas <- aus_livestock |> 
+  filter(Animal == "Sheep",
+         State == "New South Wales") |> 
+  select(-c(Animal, State))
+
+ovejas
+
+ovejas |> 
+  autoplot(Count)
+```
+
+## Train/Test splits
+
+```{r}
+ovejas_train <- ovejas |> 
+  filter_index(. ~ "Dec. 2012")
+
+ovejas_train
+```
+
+## Visualization
+
+### Time plot
+
+```{r}
+ovejas_train |> 
+  autoplot(Count)
+```
+
+```{r}
+lambda <- ovejas_train |> 
+  features(Count, features = guerrero) |> 
+  pull(lambda_guerrero)
+lambda
+
+ovejas_train |> 
+  autoplot(box_cox(Count, lambda))
+```
+
+
+
+### Season plot
+
+```{r}
+ovejas_train |> 
+  gg_season(Count)
+
+ovejas_train |> 
+  gg_season(box_cox(Count, lambda))
+```
+```{r}
+ovejas_train |> 
+  features(Count, feat_stl)
+```
+
+### STL Decomposition
+
+```{r}
+ovejas_train |> 
+  model(
+    stl = STL(box_cox(Count, lambda), robust = TRUE)
+  ) |> 
+  components() |> 
+  autoplot()
+```
+
+## Model estimation
+
+```{r}
+ovejas_fit <- ovejas_train |> 
+  model(
+    snaive_bc = SNAIVE(box_cox(Count, lambda)),
+    snaive = SNAIVE(Count),
+    combi_bc = decomposition_model(
+      STL(box_cox(Count, lambda), robust = TRUE),
+      SNAIVE(season_year),
+      RW(season_adjust ~ drift())
+    ),
+    combi = decomposition_model(
+      STL(Count, robust = TRUE),
+      SNAIVE(season_year),
+      RW(season_adjust ~ drift())
+    )
+  )
+ovejas_fit
+```
+Autocorrelation diagnostics
+
+```{r}
+ovejas_fit |> 
+  select(snaive_bc) |> 
+  gg_tsresiduals()
+
+ovejas_fit |> 
+  select(snaive) |> 
+  gg_tsresiduals()
+
+ovejas_fit |> 
+  select(combi) |> 
+  gg_tsresiduals()
+
+ovejas_fit |> 
+  select(combi_bc) |> 
+  gg_tsresiduals()
+
+ovejas_fit |> 
+  augment() |> 
+  features(.innov, ljung_box, dof = 0, lag = 24)
+```
+
+```{r}
+accuracy(ovejas_fit) |> 
+  arrange(MAPE)
+```
+
+## Forecast
+
+```{r}
+ovejas_fc <- ovejas_fit |> 
+  forecast(h = "6 years")
+
+ovejas_fc
+
+ovejas_fc |> 
+  autoplot(ovejas |> filter_index("Jan. 2003" ~ .), level = NULL)
+```
+
+```{r}
+ovejas_fc |> 
+  accuracy(ovejas) |> 
+  arrange(MAPE)
+```
+

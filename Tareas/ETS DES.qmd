@@ -1,0 +1,305 @@
+---
+title: "ETS DES"
+format: html
+editor: visual
+---
+
+------------------------------------------------------------------------
+
+## ETS
+
+```{r}
+library(tidyverse)
+library(fpp3) 
+library(lubridate) # Para manejo de fechas
+
+library(tidyverse)
+library(lubridate)
+
+# Filtrar los datos para Estados Unidos, Canadá y México y los últimos 20 años
+recent_gdp <- global_economy %>%
+  filter(Country %in% c("United States", "Canada", "Mexico") & Year >= year(Sys.Date()) - 20) %>%
+  select(Country, Year, GDP)
+
+gdp_usa <- recent_gdp %>%
+  filter(Country == "United States")
+
+gdp_canada <- recent_gdp %>%
+  filter(Country == "Canada")
+
+gdp_mexico <- recent_gdp %>%
+  filter(Country == "Mexico")
+
+
+print(gdp_usa)
+print(gdp_canada)
+print(gdp_mexico)
+
+```
+
+```{r}
+library(ggplot2)
+
+# Datos de Estados Unidos
+print(gdp_usa)
+ggplot(gdp_usa, aes(x = Year, y = GDP)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "PIB de Estados Unidos (Últimos 20 años)",
+       x = "Año",
+       y = "PIB (US$)") +
+  theme_minimal()
+
+# Datos de Canadá
+print(gdp_canada)
+ggplot(gdp_canada, aes(x = Year, y = GDP)) +
+  geom_line(color = "red") +
+  geom_point(color = "red") +
+  labs(title = "PIB de Canadá (Últimos 20 años)",
+       x = "Año",
+       y = "PIB (US$)") +
+  theme_minimal()
+
+# Datos de México
+print(gdp_mexico)
+ggplot(gdp_mexico, aes(x = Year, y = GDP)) +
+  geom_line(color = "green") +
+  geom_point(color = "green") +
+  labs(title = "PIB de México (Últimos 20 años)",
+       x = "Año",
+       y = "PIB (US$)") +
+  theme_minimal()
+
+```
+
+```{r}
+library(fpp3)
+
+gdp_usa_ts <- gdp_usa %>% as_tsibble(index = Year)
+gdp_canada_ts <- gdp_canada %>% as_tsibble(index = Year)
+gdp_mexico_ts <- gdp_mexico %>% as_tsibble(index = Year)
+
+gdp_usa_stl <- gdp_usa_ts %>%
+  model(STL(GDP ~ trend(window = 7)))
+
+components_usa <- gdp_usa_stl %>%
+  components()
+
+components_usa %>%
+  autoplot() +
+  labs(title = "Descomposición STL del PIB de Estados Unidos")
+
+```
+
+muestra mucho residuo por lo que chatGPT propone hacer un pronostico Arima o pruebas de estacionalidad aunque no se muestre una estacionalidad definida.
+
+```{r}
+library(forecast)
+arima_model_usa <- auto.arima(gdp_usa_ts)
+
+checkresiduals(arima_model_usa)
+
+```
+
+```{r}
+library(forecast)
+
+# Estimar el valor lambda para la transformación Box-Cox
+lambda_usa <- BoxCox.lambda(gdp_usa_ts$GDP)
+lambda_canada <- BoxCox.lambda(gdp_canada_ts$GDP)
+lambda_mexico <- BoxCox.lambda(gdp_mexico_ts$GDP)
+
+# Aplicar la transformación Box-Cox a la serie temporal
+gdp_usa_bc <- BoxCox(gdp_usa_ts$GDP, lambda_usa)
+gdp_canada_bc <- BoxCox(gdp_canada_ts$GDP, lambda_canada)
+gdp_mexico_bc <- BoxCox(gdp_mexico_ts$GDP, lambda_mexico)
+
+
+arima_model_usa_bc <- auto.arima(gdp_usa_bc)
+
+forecast_usa_bc <- forecast(arima_model_usa_bc, h = 5)
+
+
+forecast_usa_bc$mean <- InvBoxCox(forecast_usa_bc$mean, lambda_usa)
+autoplot(forecast_usa_bc) +
+  labs(title = "Pronóstico del PIB de Estados Unidos con Modelo ARIMA (Box-Cox)",
+       x = "Año", y = "PIB (US$)")
+
+forecast_usa_bc$lower <- InvBoxCox(forecast_usa_bc$lower, lambda_usa)
+forecast_usa_bc$upper <- InvBoxCox(forecast_usa_bc$upper, lambda_usa)
+
+```
+
+```{r}
+library(forecast)
+
+# Estimar el valor lambda para la transformación Box-Cox
+lambda <- BoxCox.lambda(gdp_usa_ts$GDP)
+
+# Aplicar la transformación Box-Cox a la serie temporal
+gdp_usa_bc <- BoxCox(gdp_usa_ts$GDP, lambda)
+
+# Ajustar un modelo ETS a los datos transformados
+ets_model_usa_bc <- ets(gdp_usa_bc)
+
+# Pronóstico con modelo ETS
+forecast_ets_usa_bc <- forecast(ets_model_usa_bc, h = 5)
+
+# Revertir la transformación Box-Cox en los pronósticos
+forecast_ets_usa_bc$mean <- InvBoxCox(forecast_ets_usa_bc$mean, lambda)
+forecast_ets_usa_bc$lower <- InvBoxCox(forecast_ets_usa_bc$lower, lambda)
+forecast_ets_usa_bc$upper <- InvBoxCox(forecast_ets_usa_bc$upper, lambda)
+
+# Graficar el pronóstico
+autoplot(forecast_ets_usa_bc) +
+  labs(title = "Pronóstico del PIB de Estados Unidos con Modelo ETS (Box-Cox)",
+       x = "Año", y = "PIB (US$)")
+
+```
+
+```{r}
+# Ajustar el modelo ETS
+ets_model_usa <- ets(gdp_usa_ts$GDP)
+
+# Pronóstico con modelo ETS
+forecast_ets_usa <- forecast(ets_model_usa, h = 5)
+
+# Graficar el pronóstico
+autoplot(forecast_ets_usa) +
+  labs(title = "Pronóstico del PIB de Estados Unidos con Modelo ETS",
+       x = "Año", y = "PIB (US$)")
+```
+
+```{r}
+library(forecast)
+library(tidyverse)
+
+# Asegúrate de que las series temporales estén en el formato correcto
+gdp_usa_ts <- ts(gdp_usa$GDP, start = c(min(gdp_usa$Year)), end = c(max(gdp_usa$Year)))
+gdp_canada_ts <- ts(gdp_canada$GDP, start = c(min(gdp_canada$Year)), end = c(max(gdp_canada$Year)))
+gdp_mexico_ts <- ts(gdp_mexico$GDP, start = c(min(gdp_mexico$Year)), end = c(max(gdp_mexico$Year)))
+
+# Lista para almacenar los modelos ETS
+ets_models <- list()
+
+# Lista para almacenar los pronósticos
+forecasts <- list()
+
+# Ajustar un modelo ETS para cada país
+ets_models[['USA']] <- ets(gdp_usa_ts)
+ets_models[['Canada']] <- ets(gdp_canada_ts)
+ets_models[['Mexico']] <- ets(gdp_mexico_ts)
+
+# Crear pronósticos para cada modelo ETS
+forecasts[['USA']] <- forecast(ets_models[['USA']], h = 5)
+forecasts[['Canada']] <- forecast(ets_models[['Canada']], h = 5)
+forecasts[['Mexico']] <- forecast(ets_models[['Mexico']], h = 5)
+
+# Función para graficar los pronósticos
+plot_forecasts <- function(forecast, title) {
+  autoplot(forecast) +
+    labs(title = title, x = "Año", y = "PIB (US$)") +
+    theme_minimal()
+}
+
+# Graficar los pronósticos para cada país por separado
+plot_forecasts(forecasts[['USA']], "Pronóstico del PIB de Estados Unidos con Modelo ETS")
+plot_forecasts(forecasts[['Canada']], "Pronóstico del PIB de Canadá con Modelo ETS")
+plot_forecasts(forecasts[['Mexico']], "Pronóstico del PIB de México con Modelo ETS")
+
+# Graficar los pronósticos en un único gráfico para comparar
+p1 <- plot_forecasts(forecasts[['USA']], "Estados Unidos") + ggtitle("USA") + theme(legend.position="bottom")
+p2 <- plot_forecasts(forecasts[['Canada']], "Canadá") + theme(legend.position="bottom")
+p3 <- plot_forecasts(forecasts[['Mexico']], "México") + theme(legend.position="bottom")
+
+#Utilizar patchwork para unir
+library(patchwork)
+(p1 | p2 | p3) + plot_layout(guides = 'collect') & theme(legend.position = 'bottom')
+
+```
+
+Inicialización del Análisis de Series Temporales Me dirigí a ChatGPT con la intención de crear un análisis de series temporales utilizando un documento Quarto. ChatGPT me proporcionó ejemplos de código y explicaciones detalladas sobre cómo estructurar este análisis utilizando tidyverse y fpp3.
+
+Análisis y Modelado Preliminar Con la guía de ChatGPT, pude revisar un conjunto de datos y llevar a cabo un análisis exploratorio, que incluía la visualización de datos y la descomposición de series temporales. Discutimos cómo implementar modelos de referencia para la producción de cerveza, un ejemplo pertinente para mi análisis.
+
+Evaluación de Modelos y Métricas ChatGPT me ayudó a entender cómo evaluar los modelos utilizando métricas de error como el MAE, y cómo utilizar estas métricas para identificar el mejor modelo durante la fase de entrenamiento y pronóstico.
+
+Descomposición y Visualización de Series Temporales A través de la conversación, logré implementar y visualizar descomposiciones de series temporales. ChatGPT me asesoró en cómo generar gráficos que desglosaran la serie en componentes de tendencia y estacionalidad.
+
+Implementación y Proyección de Modelos ETS ChatGPT me orientó en la selección y ajuste de modelos ETS a mis datos, primero con la transformación Box-Cox y luego sin ella. Este asesoramiento fue crucial para entender las distintas configuraciones de modelos y su impacto en los pronósticos.
+
+Análisis y Revisión de Resultados del Modelo ARIMA Después de ajustar un modelo ARIMA a mi serie temporal, discutimos los resultados y cómo interpretarlos. ChatGPT proporcionó insights sobre la significancia de los residuos y cómo podrían indicar la presencia de eventos externos importantes.
+
+Estrategias para Abordar los Residuos Significativos Exploramos juntos opciones para suavizar la serie temporal, considerando la transformación Box-Cox y el ajuste de modelos robustos a atípicos. ChatGPT me ofreció alternativas para mejorar el modelo y reducir el residuo.
+
+Documentación Conjunta del Proceso En cada etapa del análisis, ChatGPT fue un recurso valioso que no solo proporcionó asistencia técnica sino que también me ayudó a contextualizar y entender las implicaciones de mis elecciones de modelado. La conversación fue un intercambio bidireccional que me permitió profundizar en mi comprensión de las series temporales y aplicar estos conceptos de manera efectiva a mis datos.
+
+TAREA 2
+
+REALIZAR UN MODELO ARIMA SOBRE UNA SERIE DE TIEMPO DESESTACIONALIZADA.
+
+ 
+
+```{r}
+library(tidyverse)
+library(fpp3)
+
+# Supongamos que tienes dataframes ya preparados: gdp_usa, gdp_canada, gdp_mexico
+# Cada uno con las columnas 'Year' y 'GDP'
+gdp_usa_ts <- gdp_usa %>% as_tsibble(index = Year)
+gdp_canada_ts <- gdp_canada %>% as_tsibble(index = Year)
+gdp_mexico_ts <- gdp_mexico %>% as_tsibble(index = Year)
+
+```
+
+```{r}
+gdp_usa_ts %>% features(GDP, unitroot_kpss)
+gdp_canada_ts %>% features(GDP, unitroot_kpss)
+gdp_mexico_ts %>% features(GDP, unitroot_kpss)
+gdp_usa_diff <- gdp_usa_ts %>% mutate(GDP_diff = difference(GDP))
+```
+
+```{r}
+gdp_usa_ts %>% ACF(GDP)
+gdp_usa_ts %>% PACF(GDP)
+gdp_canada_ts %>% ACF(GDP)
+ gdp_canada_ts %>%  PACF(GDP)
+gdp_mexico_ts %>% ACF(GDP)
+gdp_mexico_ts %>%  PACF(GDP)  
+```
+
+```{r}
+library(forecast)
+
+auto_model_usa <- auto.arima(gdp_usa_ts$GDP)
+auto_model_canada <- auto.arima(gdp_canada_ts$GDP)
+auto_model_mexico <- auto.arima(gdp_mexico_ts$GDP)
+```
+
+```{r}
+checkresiduals(auto_model_usa)
+checkresiduals(auto_model_canada)
+checkresiduals(auto_model_mexico)
+```
+
+```{r}
+forecast_usa <- forecast(auto_model_usa, h = 5)
+forecast_canada <- forecast(auto_model_canada, h = 5)
+forecast_mexico <- forecast(auto_model_mexico, h = 5)
+
+# Visualizar los pronósticos
+autoplot(forecast_usa) +
+  labs(title = "Pronóstico del PIB de Estados Unidos con Modelo ARIMA",
+       x = "Año", y = "PIB (US$)") +
+  theme_minimal()
+
+autoplot(forecast_canada) +
+  labs(title = "Pronóstico del PIB de Canadá con Modelo ARIMA",
+       x = "Año", y = "PIB (CAD$)") +
+  theme_minimal()
+
+autoplot(forecast_mexico) +
+  labs(title = "Pronóstico del PIB de México con Modelo ARIMA",
+       x = "Año", y = "PIB (MXN$)") +
+  theme_minimal()
+```

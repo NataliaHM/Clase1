@@ -1,0 +1,152 @@
+---
+title: "CARAC TS"
+format: 
+  html: 
+    embed-resources: true
+    toc: true
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(fpp3) 
+```
+
+```{r}
+global_economy
+```
+
+```{r}
+canadian_gas
+```
+
+
+```{r}
+# Suponiendo que `global_economy` es tu dataframe
+# Calcular el PIB per cápita
+global_economy <- global_economy %>%
+  mutate(gdp_per_capita = GDP / Population)
+```
+
+```{r}
+global_economy |>
+  autoplot(GDP / Population)+
+theme(legend.position = "none")
+```
+```{r}
+global_economy|>
+  select(-c(Code,Growth:Exports))|>
+    filter(Year==2017)|>
+  arrange(desc(GDP/Population))
+```
+
+```{r}
+global_economy %>%
+  filter(Country == "United States") %>%
+  as_tsibble(key = Country, index = Year) %>%
+  autoplot(GDP) +
+  labs(title = "PIB de EE.UU.", x = "Año", y = "PIB") +
+  theme_minimal()
+```
+
+
+```{r}
+global_economy %>%
+  filter(Country == "Mexico") %>%
+  as_tsibble(key = Country, index = Year) %>%
+  autoplot(GDP) +
+  labs(title = "PIB de México", x = "Año", y = "PIB") 
+  
+```
+
+```{r}
+vic_elec %>%
+  as_tsibble(index = Time) %>%
+  autoplot(Demand) +
+  labs(title = "Demanda de electricidad en Victoria", x = "Tiempo", y = "Demanda") +
+  theme_minimal()
+```
+
+```{r}
+library(fpp3)
+
+canadian_gas <- as_tsibble(canadian_gas)
+
+autoplot(canadian_gas, Volume)
+
+lambda <- canadian_gas %>% features(Volume, features = guerrero)
+print(lambda)
+
+```
+
+```{r}
+canadian_gas|>
+  autoplot(Volume)
+```
+
+```{r}
+library(fma)
+library(forecast)
+```
+```{r}
+fma::plastics
+```
+
+
+```{r}
+# Cargar el dataset plastics
+data(plastics)
+```
+
+```{r}
+plastico<-as_tsibble(fma::plastics)
+autoplot(plastico)
+```
+
+
+
+```{r}
+# Graficar la serie de tiempo
+plot(plastics, main="Ventas Mensuales del Producto A", ylab="Ventas (miles)")
+```
+Estacionalidad anual
+Tendencia alcista
+
+```{r}
+# Descomposición clásica multiplicativa
+plastics_decomp <- decompose(plastics, type="multiplicative")
+plot(plastics_decomp)
+```
+Si
+
+```{r}
+# Calcular y graficar los datos desestacionalizados
+plastics_adjusted <- plastics / plastics_decomp$seasonal
+plot(plastics_adjusted, main="Datos Desestacionalizados del Producto A", ylab="Ventas Desestacionalizadas (miles)")
+```
+
+
+```{r}
+
+# Introducir un outlier
+plastics_outlier <- plastics
+plastics_outlier[36] <- plastics_outlier[15] + 500 
+# Descomposición con outlier
+plastics_decomp_outlier <- decompose(plastics_outlier, type="multiplicative")
+plastics_adjusted_outlier <- plastics_outlier / plastics_decomp_outlier$seasonal
+
+# Graficar los datos desestacionalizados con outlier
+plot(plastics_adjusted_outlier, main="Datos Desestacionalizados con Outlier del Producto A", ylab="Ventas Desestacionalizadas con Outlier (miles)")
+
+
+```
+Modifica la tendencia en los periodos anteriores y posteriores
+cambia forma del patron estacional
+
+
+
+`
+```
+

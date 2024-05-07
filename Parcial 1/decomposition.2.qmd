@@ -1,0 +1,104 @@
+---
+title: "Time Series Decomposition"
+author: "Natalia"
+format: docx
+toc: true
+---
+
+```{r}
+# Bibliotecas 
+library(tidyverse)  
+library(fpp3)      
+```
+
+
+```{r}
+# Primero se filtra y seleccionan los datos. La base es sobre el empleo en el sector minorista de EE.UU. desde 1990
+empleo_tsbl <- us_employment |> 
+  filter(year(Month) >= 1990, Title == "Retail Trade") |>
+  select(-Series_ID)
+```
+
+
+```{r}
+# Guardando los datos filtrados en un archivo CSV (comentado para evitar sobreescribir el archivo)
+# dir.create("parcial_1/datos") # Para crear una carpeta
+# empleo_tsbl |>
+#   write_csv("parcial_1/datos/empleo_eeuu.csv")
+```
+
+
+```{r}
+# Serie temporal de empleo en el sector minorista de EE.UU.
+empleo_tsbl |> 
+  autoplot(Employed)
+
+# Descomposición clásica aditiva de la serie temporal de empleo
+empleo_decomp <- empleo_tsbl |> 
+  model(
+    `Descomposición clásica aditiva` = classical_decomposition(Employed, type = "additive")
+  )
+   
+empleo_decomp
+```
+
+
+```{r}
+# Componentes de la descomposición clásica
+empleo_components <- empleo_decomp |> 
+  components()
+```
+
+
+```{r}
+# Serie desestacionalizada
+empleo_components |> 
+  mutate(desestacionalizados = Employed - seasonal)  # No es necesario, ya que seasonal_adjust proporciona la serie desestacionalizada
+
+empleo_components |> 
+  autoplot()
+```
+
+
+```{r}
+# Se realiza la descomposición STL (tendencia, estacionalidad y residuos) de la serie temporal de empleo
+empleo_fit <- empleo_tsbl |> 
+  model(
+    stl = STL(Employed, robust = TRUE)
+  )
+```
+
+
+```{r}
+# Los componentes de la descomposición STL
+empleo_components <- empleo_fit |> 
+  components()
+
+empleo_components |> 
+  autoplot()
+```
+
+
+```{r}
+# La serie original y la serie desestacionalizada usando la descomposición STL
+empleo_tsbl |> 
+  autoplot(Employed, color = "gray", size = 1) +
+  theme_light() +
+  autolayer(empleo_components, season_adjust, color = "firebrick", size = 1) +
+  labs(title = "El empleo en el sector minorista en EE.UU.",
+       subtitle = "Serie desestacionalizada")
+```
+
+
+```{r}
+# Se realizó una descomposición STL y se visualiza sus componentes
+empleo_tsbl |> 
+  model(
+    stl = STL(Employed ~ trend(window = 17) + season(window = 7))
+  ) |> 
+  components() |> 
+  autoplot()
+```
+
+
+
